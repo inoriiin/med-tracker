@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Medical Sync Terminal - Althea & Inosidin Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=VT323&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        crt: {
+                            bg: '#0c100e',
+                            panel: '#121815',
+                            border: '#2a3b33',
+                            green: '#33ff77',
+                            amber: '#ffb000',
+                            blue: '#4db8ff',
+                            red: '#ff4d4d',
+                            purple: '#a855f7',
+                            muted: '#52695c'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"Fira Code"', 'monospace'],
+                        vt: ['"VT323"', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0c100e;
+            color: #d1fae5;
+            font-family: 'Fira Code', monospace;
+            background-image: radial-gradient(#1e2923 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+
+        /* Scanline Overlay for Retro Monitor Vibe */
+        .scanlines {
+            position: relative;
+        }
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 40;
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .crt-card {
+            background: #121815;
+            border: 2px solid #2a3b33;
+            box-shadow: 0 0 10px rgba(42, 59, 51, 0.3), inset 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .crt-btn {
+            background: #18221c;
+            border: 1px solid #3d5448;
+            color: #33ff77;
+            text-transform: uppercase;
+            transition: all 0.15s ease;
+        }
+        .crt-btn:hover {
+            background: #23322a;
+            border-color: #33ff77;
+            box-shadow: 0 0 8px rgba(51, 255, 119, 0.4);
+        }
+        .crt-btn:active {
+            transform: translateY(1px);
+        }
+
+        .crt-input {
+            background: #090d0b;
+            border: 1px solid #2a3b33;
+            color: #33ff77;
+        }
+        .crt-input:focus {
+            border-color: #33ff77;
+            outline: none;
+            box-shadow: 0 0 5px rgba(51, 255, 119, 0.3);
+        }
+
+        /* Handwritten Sheet Cell Formatting */
+        .med-cell {
+            min-width: 38px;
+            height: 48px;
+            border: 1px solid #24332b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: rgba(14, 20, 17, 0.8);
+        }
+        .med-cell.taken {
+            background: rgba(51, 255, 119, 0.15);
+            border-color: #33ff77;
+        }
+        .med-cell.month-start {
+            border: 2px solid #ff4d4d !important;
+            background: rgba(255, 77, 77, 0.12);
+        }
+        
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0c100e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a3b33;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="scanlines min-h-screen p-3 md:p-6 text-sm">
+
+    <!-- Top Header Terminal Bar -->
+    <header class="max-w-7xl mx-auto mb-6 crt-card p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-crt-green">
+        <div>
+            <div class="flex items-center gap-3">
+                <span class="text-2xl animate-pulse">⚕️</span>
+                <h1 class="font-vt text-3xl md:text-4xl tracking-wider text-crt-green uppercase font-bold drop-shadow-[0_0_8px_rgba(51,255,119,0.5)]">
+                    CLINICAL DOSAGE & INVENTORY CONSOLE v2.6
+                </h1>
+            </div>
+            <p class="text-xs text-crt-muted font-mono mt-0.5">
+                SHARED REGIMEN LOG • ALTHEA (21+7) & INOSIDIN (20 CYCLE)
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <div id="sync-indicator" class="flex items-center gap-2 px-3 py-1.5 crt-card text-xs">
+                <span id="sync-dot" class="w-2.5 h-2.5 rounded-full bg-crt-amber animate-ping"></span>
+                <span id="sync-text" class="text-crt-amber font-bold">LOCAL MODE</span>
+            </div>
+            <button onclick="toggleModal('sync-modal')" class="crt-btn px-3 py-1.5 text-xs font-bold flex items-center gap-1">
+                ⚡ SYNC CONFIG
+            </button>
+            <button onclick="toggleModal('setup-guide-modal')" class="crt-btn px-3 py-1.5 text-xs font-bold text-crt-amber border-crt-amber flex items-center gap-1">
+                📖 BACKEND SETUP GUIDE
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto space-y-6">
+
+        <!-- LEGEND & STATS PANEL -->
+        <section class="crt-card p-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+            <div class="flex items-center gap-3 border-r border-crt-border/50 pr-2">
+                <div class="w-8 h-8 rounded border border-crt-green bg-crt-green/20 flex items-center justify-center font-bold text-crt-green">14</div>
+                <div>
+                    <p class="text-crt-green font-bold uppercase">Green / Bright Numbers</p>
+                    <p class="text-[11px] text-crt-muted">Pill Count Number (#1–#21 / #1–#20)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 border-r border-crt-border/50 pr-2">
+                <div class="w-8 h-8 rounded border border-crt-blue bg-crt-blue/20 flex items-center justify-center font-bold text-crt-blue">28</div>
+                <div>
+                    <p class="text-crt-blue font-bold uppercase">Blue Numbers</p>
+                    <p class="text-[11px] text-crt-muted">Calendar Day of the Month</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 border-r border-crt-border/50 pr-2">
+                <div class="w-8 h-8 rounded border-2 border-crt-red bg-crt-red/20 flex items-center justify-center font-bold text-crt-red">9/1</div>
+                <div>
+                    <p class="text-crt-red font-bold uppercase">Red Border Marks</p>
+                    <p class="text-[11px] text-crt-muted">Cycle Start / Month Start Date</p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pl-2">
+                <div>
+                    <p class="text-xs text-crt-muted uppercase font-bold">In-Stock Pills</p>
+                    <div class="flex gap-3 text-xs mt-1">
+                        <span id="stock-althea-display" class="text-crt-green font-bold">Althea: --</span>
+                        <span id="stock-inosidin-display" class="text-crt-amber font-bold">Inosidin: --</span>
+                    </div>
+                </div>
+                <button onclick="scrollToSection('purchase-section')" class="crt-btn px-2 py-1 text-[10px]">BUY +</button>
+            </div>
+        </section>
+
+        <!-- DAILY QUICK LOG & ACTIVE CYCLES DISPLAY -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Today Quick Intake Logger -->
+            <section class="crt-card p-5 lg:col-span-1 space-y-4">
+                <div class="flex justify-between items-center border-b border-crt-border pb-2">
+                    <h2 class="font-vt text-2xl text-crt-green uppercase font-bold">DAILY INTAKE RECORDER</h2>
+                    <span id="live-clock" class="text-xs font-mono text-crt-amber">10:30:00</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-crt-muted font-bold uppercase mb-1">LOGGING DATE:</label>
+                    <input type="date" id="log-date-picker" onchange="loadDateForLogging()" class="crt-input w-full p-2 text-xs font-mono rounded">
+                </div>
+
+                <div class="space-y-3 pt-2">
+                    <!-- Althea Status Box -->
+                    <div class="crt-card p-3 border-l-4 border-l-crt-green space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-sm text-crt-green uppercase">💊 ALTHEA</h3>
+                                <p class="text-[11px] text-crt-muted" id="althea-cycle-info">21 Active Days + 7 Days Rest</p>
+                            </div>
+                            <span id="althea-day-pill-badge" class="px-2 py-0.5 bg-crt-green/20 border border-crt-green text-crt-green text-xs rounded font-bold">Day --</span>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" id="check-althea-taken" onchange="saveDailyIntake()" class="w-5 h-5 accent-emerald-500 rounded">
+                                <span class="font-bold">Pill Intake Completed</span>
+                            </label>
+                            <input type="text" id="time-althea" placeholder="Time (e.g. 10:18)" onblur="saveDailyIntake()" class="crt-input p-1 text-xs w-24 text-center rounded">
+                        </div>
+                    </div>
+
+                    <!-- Inosidin Status Box -->
+                    <div class="crt-card p-3 border-l-4 border-l-crt-amber space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-sm text-crt-amber uppercase">💊 INOSIDIN</h3>
+                                <p class="text-[11px] text-crt-muted" id="inosidin-cycle-info">20 Pill Cycle</p>
+                            </div>
+                            <span id="inosidin-day-pill-badge" class="px-2 py-0.5 bg-crt-amber/20 border border-crt-amber text-crt-amber text-xs rounded font-bold">Day --</span>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" id="check-inosidin-taken" onchange="saveDailyIntake()" class="w-5 h-5 accent-amber-500 rounded">
+                                <span class="font-bold">Pill Intake Completed</span>
+                            </label>
+                            <input type="text" id="time-inosidin" placeholder="Time (e.g. 10:00)" onblur="saveDailyIntake()" class="crt-input p-1 text-xs w-24 text-center rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-crt-muted font-bold uppercase mb-1">Clinical Notes / Reminders:</label>
+                    <textarea id="log-notes" onblur="saveDailyIntake()" placeholder="Add notes (e.g., side effects, times, symptoms)..." class="crt-input w-full p-2 text-xs h-20 rounded resize-none"></textarea>
+                </div>
+            </section>
+
+            <!-- Cycle Selector & Tabbed Sheet -->
+            <section class="crt-card p-5 lg:col-span-2 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-crt-border pb-3">
+                    <h2 class="font-vt text-2xl text-crt-green uppercase font-bold">CYCLE REGIMEN GRID (MATCHING SHEET)</h2>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="switchMedTab('althea')" id="tab-althea" class="crt-btn px-3 py-1 text-xs font-bold border-crt-green text-crt-green">
+                            ALTHEA (21+7)
+                        </button>
+                        <button onclick="switchMedTab('inosidin')" id="tab-inosidin" class="crt-btn px-3 py-1 text-xs font-bold border-crt-border text-crt-muted">
+                            INOSIDIN (20)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scrollable Handwritten Grid Container -->
+                <div id="grid-sheet-container" class="space-y-6 overflow-x-auto pb-2">
+                    <!-- Dynamic rendering of 1st, 2nd, 3rd, 4th, 5th, 6th cycles -->
+                </div>
+            </section>
+
+        </div>
+
+        <!-- PHARMACY PURCHASE & INVENTORY SECTION -->
+        <section id="purchase-section" class="crt-card p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-crt-border pb-3">
+                <div>
+                    <h2 class="font-vt text-2xl text-crt-amber uppercase font-bold">📦 PHARMACY PURCHASE & STOCK LOG</h2>
+                    <p class="text-xs text-crt-muted">Record medication restocks to maintain accurate stock counts</p>
+                </div>
+                <div class="px-3 py-1 bg-crt-amber/10 border border-crt-amber text-crt-amber font-mono text-xs rounded">
+                    Althea = ₱543/pack (TGP) | Inosidin = ₱500/20pcs
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Purchase Entry Form -->
+                <form onsubmit="handlePurchaseSubmit(event)" class="crt-card p-4 space-y-3">
+                    <h3 class="font-bold text-xs uppercase text-crt-green border-b border-crt-border pb-1">+ Record New Purchase</h3>
+                    
+                    <div>
+                        <label class="block text-xs text-crt-muted mb-1">Medication:</label>
+                        <select id="buy-med" required class="crt-input w-full p-2 text-xs rounded font-mono">
+                            <option value="Althea">Althea (Pack - 21 Pills)</option>
+                            <option value="Inosidin">Inosidin (Pack - 20 Pills)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-crt-muted mb-1">Purchase Date:</label>
+                            <input type="date" id="buy-date" required class="crt-input w-full p-2 text-xs rounded font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-crt-muted mb-1">Packs Bought:</label>
+                            <input type="number" id="buy-qty" min="1" value="1" required class="crt-input w-full p-2 text-xs rounded font-mono">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-crt-muted mb-1">Total Cost (₱) / Notes:</label>
+                        <input type="text" id="buy-notes" placeholder="e.g. ₱543 at TGP Pharmacy" class="crt-input w-full p-2 text-xs rounded font-mono">
+                    </div>
+
+                    <button type="submit" class="crt-btn w-full py-2 text-xs font-bold border-crt-amber text-crt-amber hover:border-crt-amber">
+                        SAVE PURCHASE TO INVENTORY
+                    </button>
+                </form>
+
+                <!-- Purchase Table -->
+                <div class="lg:col-span-2 overflow-x-auto">
+                    <table class="w-full text-left text-xs border border-crt-border">
+                        <thead class="bg-crt-panel border-b border-crt-border text-crt-muted uppercase font-bold">
+                            <tr>
+                                <th class="p-2 border-r border-crt-border">Date</th>
+                                <th class="p-2 border-r border-crt-border">Medication</th>
+                                <th class="p-2 border-r border-crt-border">Quantity</th>
+                                <th class="p-2 border-r border-crt-border">Cost / Notes</th>
+                                <th class="p-2 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchase-table-body" class="divide-y divide-crt-border">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SYNC CONFIG MODAL -->
+    <div id="sync-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="crt-card p-6 max-w-lg w-full space-y-4 border-2 border-crt-green">
+            <div class="flex justify-between items-center border-b border-crt-border pb-2">
+                <h2 class="font-vt text-2xl text-crt-green uppercase font-bold">⚡ REAL-TIME SYNC CONFIG</h2>
+                <button onclick="toggleModal('sync-modal')" class="text-crt-muted hover:text-white font-bold">✕</button>
+            </div>
+
+            <p class="text-xs text-crt-muted">
+                Connect your tracker with your partner using a free shared backend bin. No username or password required.
+            </p>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-crt-muted mb-1">Storage Mode:</label>
+                    <select id="sync-provider" onchange="toggleSyncFields()" class="crt-input w-full p-2 rounded">
+                        <option value="local">Local Browser Storage Only</option>
+                        <option value="jsonbin">JSONBin.io Cloud Bin (Recommended Sync)</option>
+                    </select>
+                </div>
+
+                <div id="jsonbin-inputs" class="space-y-3 pt-2 border-l-2 border-crt-green pl-3 hidden">
+                    <div>
+                        <label class="block font-bold text-crt-muted">JSONBin Master Key ($2b$10...):</label>
+                        <input type="password" id="cfg-jsonbin-key" placeholder="Paste Master Key" class="crt-input w-full p-2 rounded font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-crt-muted">Bin ID:</label>
+                        <input type="text" id="cfg-jsonbin-id" placeholder="Paste Bin ID" class="crt-input w-full p-2 rounded font-mono">
+                    </div>
+                    <button onclick="autoCreateJsonBin()" class="crt-btn px-3 py-1 text-xs text-crt-amber border-crt-amber">
+                        ✨ Auto-Create New Shared Bin
+                    </button>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-crt-border">
+                    <button onclick="toggleModal('sync-modal')" class="crt-btn px-4 py-2">Close</button>
+                    <button onclick="saveSyncSettings()" class="crt-btn px-4 py-2 text-crt-green border-crt-green">Save & Connect</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BACKEND SETUP GUIDE MODAL -->
+    <div id="setup-guide-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="crt-card p-6 max-w-2xl w-full space-y-4 max-h-[90vh] overflow-y-auto border-2 border-crt-amber">
+            <div class="flex justify-between items-center border-b border-crt-border pb-2">
+                <h2 class="font-vt text-2xl text-crt-amber uppercase font-bold">📖 BACKEND & HOSTING INSTRUCTIONS</h2>
+                <button onclick="toggleModal('setup-guide-modal')" class="text-crt-muted hover:text-white font-bold">✕</button>
+            </div>
+
+            <div class="space-y-4 text-xs text-crt-muted leading-relaxed">
+                <div>
+                    <h3 class="font-bold text-crt-green uppercase mb-1">1. Live Web Hosting (GitHub Pages - Free)</h3>
+                    <ol class="list-decimal list-inside space-y-1 pl-1">
+                        <li>Create a GitHub account and start a new public repository named <code class="text-crt-green">med-tracker</code>.</li>
+                        <li>Upload this exact file as <code class="text-crt-green">index.html</code>.</li>
+                        <li>Go to <b>Settings -> Pages</b>, set Source to <b>Deploy from a branch (main / root)</b> and save.</li>
+                        <li>Your app will be live at <code class="text-crt-amber">https://yourusername.github.io/med-tracker/</code>!</li>
+                    </ol>
+                </div>
+
+                <div class="border-t border-crt-border pt-3">
+                    <h3 class="font-bold text-crt-amber uppercase mb-1">2. Simple Shared Backend (JSONBin.io)</h3>
+                    <ol class="list-decimal list-inside space-y-1 pl-1">
+                        <li>Go to <a href="https://jsonbin.io" target="_blank" class="text-crt-blue underline">JSONBin.io</a> and register a free account.</li>
+                        <li>Click your profile top-right -> <b>API Keys</b> -> copy your <b>Master Key</b>.</li>
+                        <li>Open <b>⚡ SYNC CONFIG</b> in this app, select <b>JSONBin.io</b>, paste the Master Key, and click <b>Auto-Create New Shared Bin</b>.</li>
+                        <li>Copy the generated <b>Bin ID</b> and send both the <b>Master Key</b> and <b>Bin ID</b> to your SO. Once entered on her end, both devices share identical updates instantly!</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="text-right">
+                <button onclick="toggleModal('setup-guide-modal')" class="crt-btn px-4 py-2 text-xs">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        
+        // Exact dataset mapping based on the handwritten sheets
+        const PRESET_CYCLES = {
+            althea: [
+                {
+                    name: "1st Cycle",
+                    startMonthDate: "8/26",
+                    monthStarts: ["9/1"],
+                    activeDays: [
+                        { pill: 1, date: "8/26", time: "" },
+                        { pill: 2, date: "8/27", time: "" },
+                        { pill: 3, date: "8/28", time: "" },
+                        { pill: 4, date: "8/29", time: "" },
+                        { pill: 5, date: "8/30", time: "" },
+                        { pill: 6, date: "8/31", time: "" },
+                        { pill: 7, date: "9/1", time: "", isMonthStart: true },
+                        { pill: 8, date: "9/2", time: "" },
+                        { pill: 9, date: "9/3", time: "" },
+                        { pill: 10, date: "9/4", time: "" },
+                        { pill: 11, date: "9/5", time: "" },
+                        { pill: 12, date: "9/6", time: "" },
+                        { pill: 13, date: "9/7", time: "" },
+                        { pill: 14, date: "9/8", time: "" },
+                        { pill: 15, date: "9/9", time: "" },
+                        { pill: 16, date: "9/10", time: "" },
+                        { pill: 17, date: "9/11", time: "" },
+                        { pill: 18, date: "9/12", time: "" },
+                        { pill: 19, date: "9/13", time: "" },
+                        { pill: 20, date: "9/14", time: "" },
+                        { pill: 21, date: "9/15", time: "", note: "11:30" }
+                    ],
+                    cooldownDays: [
+                        { pill: 1, date: "9/16" }, { pill: 2, date: "9/17" }, { pill: 3, date: "9/18" },
+                        { pill: 4, date: "9/19" }, { pill: 5, date: "9/20" }, { pill: 6, date: "9/21" }, { pill: 7, date: "9/22" }
+                    ]
+                },
+                {
+                    name: "2nd Cycle",
+                    startMonthDate: "9/23",
+                    monthStarts: ["10/1"],
+                    activeDays: [
+                        { pill: 1, date: "9/23" }, { pill: 2, date: "9/24" }, { pill: 3, date: "9/25" }, { pill: 4, date: "9/26" },
+                        { pill: 5, date: "9/27", time: "10:18" }, { pill: 6, date: "9/28" }, { pill: 7, date: "9/29", time: "10:04" },
+                        { pill: 8, date: "9/30" }, { pill: 9, date: "10/1", time: "10:02", isMonthStart: true },
+                        { pill: 10, date: "10/2", time: "10:10" }, { pill: 11, date: "10/3" }, { pill: 12, date: "10/4" },
+                        { pill: 13, date: "10/5" }, { pill: 14, date: "10/6" }, { pill: 15, date: "10/7" }, { pill: 16, date: "10/8" },
+                        { pill: 17, date: "10/9" }, { pill: 18, date: "10/10" }, { pill: 19, date: "10/11" }, { pill: 20, date: "10/12" },
+                        { pill: 21, date: "10/13", note: "10:00" }
+                    ],
+                    cooldownDays: [
+                        { pill: 1, date: "10/14" }, { pill: 2, date: "10/15" }, { pill: 3, date: "10/16" },
+                        { pill: 4, date: "10/17" }, { pill: 5, date: "10/18" }, { pill: 6, date: "10/19" }, { pill: 7, date: "10/20" }
+                    ]
+                },
+                {
+                    name: "3rd Cycle",
+                    startMonthDate: "10/21",
+                    monthStarts: ["11/1"],
+                    activeDays: Array.from({length: 21}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 21 <= 31 ? '10/' + (i + 21) : '11/' + (i + 21 - 31)}`,
+                        isMonthStart: (i + 21 - 31) === 1
+                    })),
+                    cooldownDays: Array.from({length: 7}, (_, i) => ({
+                        pill: i + 1,
+                        date: `11/${i + 11}`
+                    }))
+                },
+                {
+                    name: "4th Cycle",
+                    startMonthDate: "11/18",
+                    monthStarts: ["12/1"],
+                    activeDays: Array.from({length: 21}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 18 <= 30 ? '11/' + (i + 18) : '12/' + (i + 18 - 30)}`,
+                        isMonthStart: (i + 18 - 30) === 1
+                    })),
+                    cooldownDays: Array.from({length: 7}, (_, i) => ({
+                        pill: i + 1,
+                        date: `12/${i + 9}`
+                    }))
+                },
+                {
+                    name: "5th Cycle",
+                    startMonthDate: "12/16",
+                    monthStarts: ["1/1"],
+                    activeDays: Array.from({length: 21}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 16 <= 31 ? '12/' + (i + 16) : '1/' + (i + 16 - 31)}`,
+                        isMonthStart: (i + 16 - 31) === 1
+                    })),
+                    cooldownDays: Array.from({length: 7}, (_, i) => ({
+                        pill: i + 1,
+                        date: `1/${i + 6}`
+                    }))
+                },
+                {
+                    name: "6th Cycle",
+                    startMonthDate: "1/13",
+                    monthStarts: ["2/1"],
+                    activeDays: Array.from({length: 21}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 13 <= 31 ? '1/' + (i + 13) : '2/' + (i + 13 - 31)}`,
+                        isMonthStart: (i + 13 - 31) === 1
+                    })),
+                    cooldownDays: Array.from({length: 7}, (_, i) => ({
+                        pill: i + 1,
+                        date: `2/${i + 3}`
+                    }))
+                }
+            ],
+            inosidin: [
+                {
+                    name: "1st Cycle",
+                    startMonthDate: "8/26",
+                    pills: [
+                        { pill: 1, date: "8/26" }, { pill: 2, date: "8/27" }, { pill: 3, date: "8/28" }, { pill: 4, date: "8/29" },
+                        { pill: 5, date: "8/30" }, { pill: 6, date: "8/31" }, { pill: 7, date: "9/1", isMonthStart: true }, { pill: 8, date: "9/2" },
+                        { pill: 9, date: "9/3" }, { pill: 10, date: "9/4" }, { pill: 11, date: "9/5" }, { pill: 12, date: "9/6" },
+                        { pill: 13, date: "9/7" }, { pill: 14, date: "9/8" }, { pill: 15, date: "9/9" }, { pill: 16, date: "9/10" },
+                        { pill: 17, date: "9/11" }, { pill: 18, date: "9/12" }, { pill: 19, date: "9/13" }, { pill: 20, date: "9/14" }
+                    ]
+                },
+                {
+                    name: "2nd Cycle",
+                    startMonthDate: "9/15",
+                    pills: Array.from({length: 20}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 15 <= 30 ? '9/' + (i + 15) : '10/' + (i + 15 - 30)}`,
+                        isMonthStart: (i + 15 - 30) === 1,
+                        time: i === 3 ? "2:50 AM" : (i === 18 ? "4:17 AM" : "")
+                    }))
+                },
+                {
+                    name: "3rd Cycle",
+                    startMonthDate: "10/5",
+                    pills: Array.from({length: 20}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 5 <= 31 ? '10/' + (i + 5) : '11/' + (i + 5 - 31)}`,
+                        isMonthStart: (i + 5 - 31) === 1
+                    }))
+                },
+                {
+                    name: "4th Cycle",
+                    startMonthDate: "10/25",
+                    pills: Array.from({length: 20}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 25 <= 31 ? '10/' + (i + 25) : '11/' + (i + 25 - 31)}`,
+                        isMonthStart: (i + 25 - 31) === 1
+                    }))
+                },
+                {
+                    name: "5th Cycle",
+                    startMonthDate: "11/14",
+                    pills: Array.from({length: 20}, (_, i) => ({
+                        pill: i + 1,
+                        date: `${i + 14 <= 30 ? '11/' + (i + 14) : '12/' + (i + 14 - 30)}`,
+                        isMonthStart: (i + 14 - 30) === 1
+                    }))
+                }
+            ]
+        };
+
+        // Global State Variable
+        let appState = {
+            activeTab: 'althea',
+            intakeLogs: {}, // date key -> { althea: true/false, altheaTime: '', inosidin: true/false, inosidinTime: '', note: '' }
+            purchases: [
+                { id: '1', date: '2026-08-25', med: 'Althea', qty: 1, notes: '₱543 - TGP Pharmacy' },
+                { id: '2', date: '2026-08-25', med: 'Inosidin', qty: 1, notes: '₱500 - 20 pieces' }
+            ],
+            sync: {
+                provider: 'local',
+                jsonbinKey: '',
+                jsonbinId: ''
+            }
+        };
+
+        window.onload = function() {
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('log-date-picker').value = today;
+            document.getElementById('buy-date').value = today;
+
+            // Load saved settings & state
+            loadStateFromStorage();
+            
+            // Start clock timer
+            setInterval(updateClock, 1000);
+            updateClock();
+
+            // Render current view
+            renderGridSheet();
+            renderPurchases();
+            loadDateForLogging();
+            updateStockCounts();
+
+            // Set up auto-sync polling if enabled
+            setInterval(syncWithCloud, 10000);
+        };
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString();
+        }
+
+        function switchMedTab(tab) {
+            appState.activeTab = tab;
+            document.getElementById('tab-althea').className = tab === 'althea' 
+                ? 'crt-btn px-3 py-1 text-xs font-bold border-crt-green text-crt-green' 
+                : 'crt-btn px-3 py-1 text-xs font-bold border-crt-border text-crt-muted';
+            document.getElementById('tab-inosidin').className = tab === 'inosidin' 
+                ? 'crt-btn px-3 py-1 text-xs font-bold border-crt-amber text-crt-amber' 
+                : 'crt-btn px-3 py-1 text-xs font-bold border-crt-border text-crt-muted';
+            renderGridSheet();
+        }
+
+        function renderGridSheet() {
+            const container = document.getElementById('grid-sheet-container');
+            container.innerHTML = '';
+
+            const isAlthea = appState.activeTab === 'althea';
+            const cycles = isAlthea ? PRESET_CYCLES.althea : PRESET_CYCLES.inosidin;
+
+            cycles.forEach((cycle) => {
+                const cycleWrapper = document.createElement('div');
+                cycleWrapper.className = 'space-y-2 pb-3 border-b border-crt-border/40';
+
+                // Header title
+                const header = document.createElement('div');
+                header.className = 'flex items-center gap-2 font-bold text-xs uppercase';
+                header.innerHTML = `
+                    <span class="text-crt-amber font-vt text-lg">${cycle.name}</span>
+                    <span class="text-crt-muted text-[11px]">(Cycle Start: <span class="text-crt-red">${cycle.startMonthDate}</span>)</span>
+                `;
+                cycleWrapper.appendChild(header);
+
+                if (isAlthea) {
+                    // Row 1: Active 21 Pills
+                    const activeRow = document.createElement('div');
+                    activeRow.className = 'flex flex-nowrap gap-1 items-center';
+                    
+                    cycle.activeDays.forEach(cell => {
+                        activeRow.appendChild(createCellElement(cell, 'althea', false));
+                    });
+                    cycleWrapper.appendChild(activeRow);
+
+                    // Row 2: 7 Day Cooldown / Reset Break
+                    const cooldownWrapper = document.createElement('div');
+                    cooldownWrapper.className = 'mt-2';
+                    cooldownWrapper.innerHTML = `<span class="text-[10px] text-crt-muted uppercase font-bold block mb-1">⚡ 7-Day Cooldown Break:</span>`;
+                    
+                    const cooldownRow = document.createElement('div');
+                    cooldownRow.className = 'flex flex-nowrap gap-1 items-center';
+                    cycle.cooldownDays.forEach(cell => {
+                        cooldownRow.appendChild(createCellElement(cell, 'althea', true));
+                    });
+                    cooldownWrapper.appendChild(cooldownRow);
+                    cycleWrapper.appendChild(cooldownWrapper);
+                } else {
+                    // Inosidin Row
+                    const inosidinRow = document.createElement('div');
+                    inosidinRow.className = 'flex flex-nowrap gap-1 items-center';
+                    cycle.pills.forEach(cell => {
+                        inosidinRow.appendChild(createCellElement(cell, 'inosidin', false));
+                    });
+                    cycleWrapper.appendChild(inosidinRow);
+                }
+
+                container.appendChild(cycleWrapper);
+            });
+        }
+
+        function createCellElement(cell, medType, isCooldown) {
+            const el = document.createElement('div');
+            const isMonthStart = cell.isMonthStart || cell.date.endsWith('/1');
+            
+            // Generate full ISO key date for intake tracking if possible
+            const fullDateKey = convertShortToISO(cell.date);
+            const intakeState = appState.intakeLogs[fullDateKey] || {};
+            const isTaken = isCooldown ? false : (medType === 'althea' ? intakeState.althea : intakeState.inosidin);
+
+            el.className = `med-cell rounded ${isTaken ? 'taken' : ''} ${isMonthStart ? 'month-start' : ''}`;
+            
+            // Time annotation text if available
+            const displayTime = cell.time || (medType === 'althea' ? intakeState.altheaTime : intakeState.inosidinTime) || cell.note || '';
+
+            el.innerHTML = `
+                ${displayTime ? `<span class="text-[8px] text-crt-amber font-mono absolute -top-1 font-bold whitespace-nowrap">${displayTime}</span>` : ''}
+                <span class="font-bold text-xs ${isCooldown ? 'text-crt-muted' : (medType==='althea'?'text-crt-green':'text-crt-amber')}">
+                    ${isCooldown ? 'R' + cell.pill : cell.pill}
+                </span>
+                <span class="text-[10px] text-crt-blue font-bold">${cell.date}</span>
+            `;
+
+            // Click cell to toggle quick log for that date
+            el.onclick = () => {
+                if (fullDateKey) {
+                    document.getElementById('log-date-picker').value = fullDateKey;
+                    loadDateForLogging();
+                }
+            };
+
+            return el;
+        }
+
+        function loadDateForLogging() {
+            const dateVal = document.getElementById('log-date-picker').value;
+            const log = appState.intakeLogs[dateVal] || { althea: false, altheaTime: '', inosidin: false, inosidinTime: '', note: '' };
+
+            document.getElementById('check-althea-taken').checked = !!log.althea;
+            document.getElementById('time-althea').value = log.altheaTime || '';
+            document.getElementById('check-inosidin-taken').checked = !!log.inosidin;
+            document.getElementById('time-inosidin').value = log.inosidinTime || '';
+            document.getElementById('log-notes').value = log.note || '';
+
+            updateStockCounts();
+        }
+
+        function saveDailyIntake() {
+            const dateVal = document.getElementById('log-date-picker').value;
+            if (!dateVal) return;
+
+            appState.intakeLogs[dateVal] = {
+                althea: document.getElementById('check-althea-taken').checked,
+                altheaTime: document.getElementById('time-althea').value,
+                inosidin: document.getElementById('check-inosidin-taken').checked,
+                inosidinTime: document.getElementById('time-inosidin').value,
+                note: document.getElementById('log-notes').value
+            };
+
+            saveStateToStorage();
+            renderGridSheet();
+            updateStockCounts();
+            syncWithCloud();
+        }
+
+        function handlePurchaseSubmit(e) {
+            e.preventDefault();
+            const newItem = {
+                id: Date.now().toString(),
+                med: document.getElementById('buy-med').value,
+                date: document.getElementById('buy-date').value,
+                qty: parseInt(document.getElementById('buy-qty').value) || 1,
+                notes: document.getElementById('buy-notes').value || ''
+            };
+
+            appState.purchases.unshift(newItem);
+            saveStateToStorage();
+            renderPurchases();
+            updateStockCounts();
+            syncWithCloud();
+
+            document.getElementById('buy-notes').value = '';
+        }
+
+        function deletePurchase(id) {
+            appState.purchases = appState.purchases.filter(p => p.id !== id);
+            saveStateToStorage();
+            renderPurchases();
+            updateStockCounts();
+            syncWithCloud();
+        }
+
+        function renderPurchases() {
+            const tbody = document.getElementById('purchase-table-body');
+            tbody.innerHTML = '';
+
+            if (appState.purchases.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-crt-muted italic">No purchases recorded yet.</td></tr>`;
+                return;
+            }
+
+            appState.purchases.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-crt-panel/50 font-mono';
+                tr.innerHTML = `
+                    <td class="p-2 border-r border-crt-border">${p.date}</td>
+                    <td class="p-2 border-r border-crt-border font-bold ${p.med === 'Althea' ? 'text-crt-green' : 'text-crt-amber'}">${p.med}</td>
+                    <td class="p-2 border-r border-crt-border font-bold">${p.qty} pack(s)</td>
+                    <td class="p-2 border-r border-crt-border text-crt-muted">${p.notes || '-'}</td>
+                    <td class="p-2 text-center">
+                        <button onclick="deletePurchase('${p.id}')" class="text-crt-red hover:underline font-bold">🗑️</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateStockCounts() {
+            // Calculate total bought
+            let altheaBoughtPills = 0;
+            let inosidinBoughtPills = 0;
+
+            appState.purchases.forEach(p => {
+                if (p.med === 'Althea') altheaBoughtPills += p.qty * 21;
+                if (p.med === 'Inosidin') inosidinBoughtPills += p.qty * 20;
+            });
+
+            // Calculate taken count
+            let altheaTaken = 0;
+            let inosidinTaken = 0;
+
+            Object.values(appState.intakeLogs).forEach(log => {
+                if (log.althea) altheaTaken++;
+                if (log.inosidin) inosidinTaken++;
+            });
+
+            const remainingAlthea = altheaBoughtPills - altheaTaken;
+            const remainingInosidin = inosidinBoughtPills - inosidinTaken;
+
+            document.getElementById('stock-althea-display').innerText = `Althea: ${remainingAlthea} pills left`;
+            document.getElementById('stock-inosidin-display').innerText = `Inosidin: ${remainingInosidin} pills left`;
+        }
+
+        function saveStateToStorage() {
+            localStorage.setItem('retro_med_tracker_state', JSON.stringify(appState));
+        }
+
+        function loadStateFromStorage() {
+            const saved = localStorage.getItem('retro_med_tracker_state');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    appState = { ...appState, ...parsed };
+                } catch (e) {
+                    console.error("Storage load error", e);
+                }
+            }
+
+            // Populate sync fields
+            if (appState.sync) {
+                document.getElementById('sync-provider').value = appState.sync.provider || 'local';
+                document.getElementById('cfg-jsonbin-key').value = appState.sync.jsonbinKey || '';
+                document.getElementById('cfg-jsonbin-id').value = appState.sync.jsonbinId || '';
+                toggleSyncFields();
+                updateSyncStatusUI();
+            }
+        }
+
+        function toggleSyncFields() {
+            const provider = document.getElementById('sync-provider').value;
+            const container = document.getElementById('jsonbin-inputs');
+            if (provider === 'jsonbin') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function saveSyncSettings() {
+            appState.sync = {
+                provider: document.getElementById('sync-provider').value,
+                jsonbinKey: document.getElementById('cfg-jsonbin-key').value.trim(),
+                jsonbinId: document.getElementById('cfg-jsonbin-id').value.trim()
+            };
+
+            saveStateToStorage();
+            updateSyncStatusUI();
+            toggleModal('sync-modal');
+            syncWithCloud();
+        }
+
+        function updateSyncStatusUI() {
+            const statusDot = document.getElementById('sync-dot');
+            const statusText = document.getElementById('sync-text');
+
+            if (appState.sync.provider === 'jsonbin' && appState.sync.jsonbinId) {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-crt-green animate-pulse";
+                statusText.className = "text-crt-green font-bold";
+                statusText.innerText = "CLOUD SYNC ACTIVE";
+            } else {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-crt-amber animate-ping";
+                statusText.className = "text-crt-amber font-bold";
+                statusText.innerText = "LOCAL MODE";
+            }
+        }
+
+        async function autoCreateJsonBin() {
+            const apiKey = document.getElementById('cfg-jsonbin-key').value.trim();
+            if (!apiKey) {
+                alert("Please paste your JSONBin Master Key first!");
+                return;
+            }
+
+            try {
+                const res = await fetch("https://api.jsonbin.io/v3/b", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Master-Key": apiKey,
+                        "X-Bin-Private": "true"
+                    },
+                    body: JSON.stringify({ intakeLogs: appState.intakeLogs, purchases: appState.purchases })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const newBinId = data.metadata.id;
+                    document.getElementById('cfg-jsonbin-id').value = newBinId;
+                    alert("✨ Shared Bin created successfully! Bin ID: " + newBinId);
+                } else {
+                    alert("Error creating bin. Check API Master key.");
+                }
+            } catch (err) {
+                alert("Network error creating bin: " + err.message);
+            }
+        }
+
+        async function syncWithCloud() {
+            if (appState.sync.provider !== 'jsonbin' || !appState.sync.jsonbinKey || !appState.sync.jsonbinId) {
+                return;
+            }
+
+            try {
+                // Fetch latest remote state
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${appState.sync.jsonbinId}/latest`, {
+                    headers: { "X-Master-Key": appState.sync.jsonbinKey }
+                });
+
+                if (res.ok) {
+                    const json = await res.json();
+                    const record = json.record;
+
+                    if (record) {
+                        appState.intakeLogs = { ...appState.intakeLogs, ...(record.intakeLogs || {}) };
+                        appState.purchases = record.purchases || appState.purchases;
+                        
+                        saveStateToStorage();
+                        renderGridSheet();
+                        renderPurchases();
+                        updateStockCounts();
+
+                        // Push merged updates back
+                        await fetch(`https://api.jsonbin.io/v3/b/${appState.sync.jsonbinId}`, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-Master-Key": appState.sync.jsonbinKey
+                            },
+                            body: JSON.stringify({ intakeLogs: appState.intakeLogs, purchases: appState.purchases })
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("Sync error:", e);
+            }
+        }
+
+        function convertShortToISO(shortDate) {
+            if (!shortDate) return null;
+            const parts = shortDate.split('/');
+            if (parts.length !== 2) return null;
+            const month = parts[0].padStart(2, '0');
+            const day = parts[1].padStart(2, '0');
+            
+            // Infer year based on medical logs (8,9,10,11,12 -> 2026, 1,2 -> 2027)
+            const year = parseInt(parts[0]) <= 2 ? '2027' : '2026';
+            return `${year}-${month}-${day}`;
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
